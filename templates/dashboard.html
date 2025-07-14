@@ -37,6 +37,22 @@
             overflow-y: auto;
             font-size: 0.8em;
         }
+        .nav-tabs .nav-link {
+            color: #6c757d;
+        }
+        .nav-tabs .nav-link.active {
+            color: #495057;
+            font-weight: 500;
+        }
+        .tab-content {
+            min-height: 400px;
+        }
+        .container-icon {
+            width: 20px;
+            height: 20px;
+            object-fit: contain;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -58,16 +74,16 @@
     <div class="container mt-4">
         <!-- Statistics Cards -->
         <div class="row mb-4">
-            <div class="col-md-3 mb-3">
+            <div class="col-md-2 mb-3">
                 <div class="card stats-card">
                     <div class="card-body text-center">
                         <i class="fas fa-cubes fa-2x mb-2"></i>
                         <h4>{{ stats.total_containers }}</h4>
-                        <small>Total Containers</small>
+                        <small>Total</small>
                     </div>
                 </div>
             </div>
-            <div class="col-md-3 mb-3">
+            <div class="col-md-2 mb-3">
                 <div class="card bg-success text-white">
                     <div class="card-body text-center">
                         <i class="fas fa-play fa-2x mb-2"></i>
@@ -76,7 +92,25 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3 mb-3">
+            <div class="col-md-2 mb-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-stop fa-2x mb-2"></i>
+                        <h4>{{ stats.exited_containers }}</h4>
+                        <small>Exited</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2 mb-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-plus fa-2x mb-2"></i>
+                        <h4>{{ stats.created_containers }}</h4>
+                        <small>Created</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-2 mb-3">
                 <div class="card bg-info text-white">
                     <div class="card-body text-center">
                         <i class="fab fa-docker fa-2x mb-2"></i>
@@ -85,114 +119,147 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-3 mb-3">
+            <div class="col-md-2 mb-3">
                 <div class="card bg-secondary text-white">
                     <div class="card-body text-center">
                         <i class="fas fa-server fa-2x mb-2"></i>
                         <h6>{{ stats.docker_version }}</h6>
-                        <small>Docker Version</small>
+                        <small>Version</small>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Containers Grid -->
-        <div class="row">
-            {% for container in containers %}
-            <div class="col-lg-6 col-xl-4 mb-4">
-                <div class="card container-card h-100">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0">
-                            <i class="fas fa-cube me-2"></i>
-                            {{ container.name }}
-                        </h6>
-                        <span class="badge bg-{% if container.status == 'running' %}success{% elif container.status == 'exited' %}danger{% else %}warning{% endif %}">
-                            {{ container.status }}
-                        </span>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-2">
-                            <strong>ID:</strong> 
-                            <code class="text-muted">{{ container.id }}</code>
-                        </div>
-                        <div class="mb-2">
-                            <strong>Image:</strong> 
-                            <span class="text-primary">{{ container.image }}</span>
-                        </div>
-                        <div class="mb-2">
-                            <strong>Created:</strong> 
-                            <small class="text-muted">{{ container.created }}</small>
-                        </div>
-                        
-                        {% if container.status == 'running' %}
-                        <hr>
-                        <div class="row text-center">
-                            <div class="col-6">
-                                <small class="text-muted">Memory</small>
-                                <div><strong>{{ container.memory_usage }}</strong></div>
-                            </div>
-                            <div class="col-6">
-                                <small class="text-muted">CPU</small>
-                                <div><strong>{{ container.cpu_percent }}</strong></div>
-                            </div>
-                        </div>
-                        {% endif %}
-
-                        {% if container.networks %}
-                        <hr>
-                        <div class="mb-2">
-                            <strong>Networks:</strong>
-                            {% for network in container.networks %}
-                            <div class="small">
-                                <span class="badge bg-light text-dark">{{ network.name }}</span>
-                                <code class="text-muted">{{ network.ip }}</code>
-                            </div>
+        <!-- Container Tabs -->
+        <div class="card">
+            <div class="card-header">
+                <ul class="nav nav-tabs card-header-tabs" id="containerTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="running-tab" data-bs-toggle="tab" data-bs-target="#running" type="button" role="tab" aria-controls="running" aria-selected="true">
+                            <i class="fas fa-play me-2"></i>Running ({{ stats.running_containers }})
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="exited-tab" data-bs-toggle="tab" data-bs-target="#exited" type="button" role="tab" aria-controls="exited" aria-selected="false">
+                            <i class="fas fa-stop me-2"></i>Exited ({{ stats.exited_containers }})
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="created-tab" data-bs-toggle="tab" data-bs-target="#created" type="button" role="tab" aria-controls="created" aria-selected="false">
+                            <i class="fas fa-plus me-2"></i>Created ({{ stats.created_containers }})
+                        </button>
+                    </li>
+                    {% if stats.paused_containers > 0 %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="paused-tab" data-bs-toggle="tab" data-bs-target="#paused" type="button" role="tab" aria-controls="paused" aria-selected="false">
+                            <i class="fas fa-pause me-2"></i>Paused ({{ stats.paused_containers }})
+                        </button>
+                    </li>
+                    {% endif %}
+                    {% if stats.other_containers > 0 %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="other-tab" data-bs-toggle="tab" data-bs-target="#other" type="button" role="tab" aria-controls="other" aria-selected="false">
+                            <i class="fas fa-question me-2"></i>Other ({{ stats.other_containers }})
+                        </button>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="containerTabContent">
+                    <!-- Running Containers Tab -->
+                    <div class="tab-pane fade show active" id="running" role="tabpanel" aria-labelledby="running-tab">
+                        {% if containers_by_status.running %}
+                        <div class="row">
+                            {% for container in containers_by_status.running %}
+                            {% include 'container_card.html' %}
                             {% endfor %}
                         </div>
-                        {% endif %}
-
-                        {% if container.ports %}
-                        <div class="mb-2">
-                            <strong>Ports:</strong>
-                            <div>
-                                {% for port in container.ports %}
-                                <span class="badge bg-primary me-1">{{ port }}</span>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {% endif %}
-
-                        {% if container.restart_policy %}
-                        <div class="mb-2">
-                            <strong>Restart Policy:</strong> 
-                            <span class="badge bg-info">{{ container.restart_policy }}</span>
-                        </div>
-                        {% endif %}
-
-                        {% if container.environment %}
-                        <div class="mb-2">
-                            <strong>Environment (sample):</strong>
-                            <div class="env-vars bg-light p-2 rounded">
-                                {% for env in container.environment %}
-                                <div class="small text-muted">{{ env }}</div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {% endif %}
-
-                        {% if container.error %}
-                        <div class="alert alert-danger small mb-0">
-                            <i class="fas fa-exclamation-triangle me-1"></i>
-                            {{ container.error }}
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-play fa-4x text-muted mb-3"></i>
+                            <h4 class="text-muted">No running containers</h4>
+                            <p class="text-muted">There are currently no running containers on this host.</p>
                         </div>
                         {% endif %}
                     </div>
+
+                    <!-- Exited Containers Tab -->
+                    <div class="tab-pane fade" id="exited" role="tabpanel" aria-labelledby="exited-tab">
+                        {% if containers_by_status.exited %}
+                        <div class="row">
+                            {% for container in containers_by_status.exited %}
+                            {% include 'container_card.html' %}
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-stop fa-4x text-muted mb-3"></i>
+                            <h4 class="text-muted">No exited containers</h4>
+                            <p class="text-muted">There are currently no exited containers on this host.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Created Containers Tab -->
+                    <div class="tab-pane fade" id="created" role="tabpanel" aria-labelledby="created-tab">
+                        {% if containers_by_status.created %}
+                        <div class="row">
+                            {% for container in containers_by_status.created %}
+                            {% include 'container_card.html' %}
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-plus fa-4x text-muted mb-3"></i>
+                            <h4 class="text-muted">No created containers</h4>
+                            <p class="text-muted">There are currently no created containers on this host.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Paused Containers Tab -->
+                    {% if stats.paused_containers > 0 %}
+                    <div class="tab-pane fade" id="paused" role="tabpanel" aria-labelledby="paused-tab">
+                        {% if containers_by_status.paused %}
+                        <div class="row">
+                            {% for container in containers_by_status.paused %}
+                            {% include 'container_card.html' %}
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-pause fa-4x text-muted mb-3"></i>
+                            <h4 class="text-muted">No paused containers</h4>
+                            <p class="text-muted">There are currently no paused containers on this host.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Other Containers Tab -->
+                    {% if stats.other_containers > 0 %}
+                    <div class="tab-pane fade" id="other" role="tabpanel" aria-labelledby="other-tab">
+                        {% if containers_by_status.other %}
+                        <div class="row">
+                            {% for container in containers_by_status.other %}
+                            {% include 'container_card.html' %}
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-question fa-4x text-muted mb-3"></i>
+                            <h4 class="text-muted">No other containers</h4>
+                            <p class="text-muted">There are currently no containers with other statuses on this host.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                 </div>
             </div>
-            {% endfor %}
         </div>
 
-        {% if not containers %}
+        {% if stats.total_containers == 0 %}
         <div class="text-center py-5">
             <i class="fas fa-cube fa-4x text-muted mb-3"></i>
             <h4 class="text-muted">No containers found</h4>

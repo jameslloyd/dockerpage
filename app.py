@@ -130,6 +130,39 @@ def format_container_info(container):
         except Exception as port_error:
             logger.warning(f"Could not get port info for container {container.name}: {port_error}")
         
+        # Get container labels and extract icon information
+        try:
+            labels = container.attrs['Config']['Labels'] or {}
+            container_info['labels'] = labels
+            
+            # Look for icon URL in various common label formats
+            icon_url = None
+            icon_labels = [
+                'icon',
+                'icon.url', 
+                'app.icon',
+                'org.opencontainers.image.icon',
+                'traefik.http.routers.icon',
+                'homepage.icon',
+                'diun.watch.repo.icon'
+            ]
+            
+            for label_key in icon_labels:
+                if label_key in labels and labels[label_key]:
+                    icon_url = labels[label_key]
+                    break
+            
+            # Use default Docker icon if no icon label is found
+            if not icon_url:
+                icon_url = "https://cdn.jsdelivr.net/gh/selfhst/icons/png/docker.png"
+            
+            container_info['icon_url'] = icon_url
+            
+        except Exception as label_error:
+            logger.warning(f"Could not get labels for container {container.name}: {label_error}")
+            container_info['labels'] = {}
+            container_info['icon_url'] = "https://cdn.jsdelivr.net/gh/selfhst/icons/png/docker.png"
+        
         return container_info
         
     except Exception as e:
@@ -155,10 +188,23 @@ def index():
         all_containers = client.containers.list(all=True)
         running_containers = client.containers.list()
         
-        # Format container information
-        containers_info = []
+        # Format container information and group by status
+        containers_by_status = {
+            'running': [],
+            'exited': [],
+            'created': [],
+            'paused': [],
+            'other': []
+        }
+        
         for container in all_containers:
-            containers_info.append(format_container_info(container))
+            container_info = format_container_info(container)
+            status = container_info['status']
+            
+            if status in containers_by_status:
+                containers_by_status[status].append(container_info)
+            else:
+                containers_by_status['other'].append(container_info)
         
         # Get Docker system info
         system_info = client.info()
@@ -166,12 +212,16 @@ def index():
         stats = {
             'total_containers': len(all_containers),
             'running_containers': len(running_containers),
+            'exited_containers': len(containers_by_status['exited']),
+            'created_containers': len(containers_by_status['created']),
+            'paused_containers': len(containers_by_status['paused']),
+            'other_containers': len(containers_by_status['other']),
             'docker_version': system_info.get('ServerVersion', 'N/A'),
             'total_images': len(client.images.list()),
             'system_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
-        return render_template('dashboard.html', containers=containers_info, stats=stats)
+        return render_template('dashboard.html', containers_by_status=containers_by_status, stats=stats)
     
     except Exception as e:
         logger.error(f"Error retrieving container information: {e}")
