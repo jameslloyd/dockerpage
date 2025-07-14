@@ -184,10 +184,12 @@ def hosts_management():
     """Docker hosts management page."""
     hosts_config = load_docker_hosts()
     current_host_id = get_current_host_id()
+    current_host = hosts_config['hosts'].get(current_host_id, {})
     
     return render_template('hosts.html', 
                          hosts_config=hosts_config,
-                         current_host_id=current_host_id)
+                         current_host_id=current_host_id,
+                         current_host=current_host)
 
 @app.route('/health')
 def health():
