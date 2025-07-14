@@ -9,12 +9,20 @@ from datetime import datetime
 from flask import Flask, render_template, session
 
 # Configure logging
-log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+log_level = os.getenv('LOG_LEVEL', 'WARN').upper()
 logging.basicConfig(
     level=getattr(logging, log_level, logging.INFO),
     format='%(levelname)s:%(name)s:%(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Configure werkzeug logger to respect the same log level
+werkzeug_logger = logging.getLogger('werkzeug')
+werkzeug_logger.setLevel(getattr(logging, log_level, logging.INFO))
+
+# Also configure Flask's logger
+flask_logger = logging.getLogger('flask')
+flask_logger.setLevel(getattr(logging, log_level, logging.INFO))
 
 # Log environment variables for debugging
 logger.info(f"ENABLE_STATS environment variable: '{os.getenv('ENABLE_STATS', 'false')}'")

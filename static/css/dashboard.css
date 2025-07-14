@@ -1,0 +1,202 @@
+/*
+ * Docker Dashboard - Main Stylesheet
+ * Consolidated CSS from all templates for better maintainability
+ */
+
+/* ========================================
+   Container Cards & Dashboard Layout
+   ======================================== */
+
+.container-card {
+    transition: transform 0.2s;
+}
+
+.container-card:hover {
+    transform: translateY(-2px);
+}
+
+.container-icon {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    border-radius: 3px;
+}
+
+.card-header {
+    user-select: none;
+}
+
+.card-header:hover {
+    background-color: rgba(0,0,0,0.05) !important;
+}
+
+.toggle-icon {
+    font-size: 0.8em;
+    color: #6c757d;
+}
+
+/* ========================================
+   Status Colors
+   ======================================== */
+
+.status-running {
+    color: #28a745;
+}
+
+.status-stopped {
+    color: #dc3545;
+}
+
+.status-paused {
+    color: #ffc107;
+}
+
+/* ========================================
+   Statistics Cards
+   ======================================== */
+
+.stats-card {
+    background: linear-gradient(45deg, #007bff, #6610f2);
+    color: white;
+}
+
+/* ========================================
+   Navigation & Tabs
+   ======================================== */
+
+.nav-tabs .nav-link {
+    color: #6c757d;
+}
+
+.nav-tabs .nav-link.active {
+    color: #495057;
+    font-weight: 500;
+}
+
+.tab-content {
+    min-height: 400px;
+}
+
+/* ========================================
+   Environment Variables Display
+   ======================================== */
+
+.env-vars {
+    max-height: 100px;
+    overflow-y: auto;
+    font-size: 0.8em;
+}
+
+/* ========================================
+   Refresh Button
+   ======================================== */
+
+.refresh-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+/* ========================================
+   Host Management Cards
+   ======================================== */
+
+.host-card {
+    transition: transform 0.2s;
+    border-left: 4px solid #dee2e6;
+}
+
+.host-card:hover {
+    transform: translateY(-2px);
+}
+
+.host-card.active {
+    border-left-color: #28a745;
+    background-color: #f8fff9;
+}
+
+.host-status {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
+/* ========================================
+   Connection Status Indicators
+   ======================================== */
+
+.connection-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.status-connected { 
+    background-color: #28a745; 
+}
+
+.status-disconnected { 
+    background-color: #dc3545; 
+}
+
+.status-testing { 
+    background-color: #ffc107; 
+    animation: pulse 1s infinite; 
+}
+
+/* ========================================
+   Animations
+   ======================================== */
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* ========================================
+   Toast Notifications
+   ======================================== */
+
+.toast {
+    z-index: 9999;
+}
+
+/* ========================================
+   Responsive Design
+   ======================================== */
+
+@media (max-width: 768px) {
+    .container-card {
+        margin-bottom: 1rem;
+    }
+    
+    .refresh-btn {
+        bottom: 10px;
+        right: 10px;
+    }
+    
+    .stats-card {
+        margin-bottom: 1rem;
+    }
+    
+    .env-vars {
+        font-size: 0.7em;
+        max-height: 80px;
+    }
+}
+
+@media (max-width: 576px) {
+    .container-icon {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .nav-tabs .nav-link {
+        font-size: 0.9em;
+        padding: 0.5rem 0.75rem;
+    }
+}
