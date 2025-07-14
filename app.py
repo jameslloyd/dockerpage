@@ -152,17 +152,34 @@ def format_container_info(container):
         except Exception as network_error:
             logger.warning(f"Could not get network info for container {container.name}: {network_error}")
         
-        # Get port mappings
+        # Get port mappings and build first port URL
         try:
             ports = container.attrs['NetworkSettings']['Ports']
             port_mappings = []
+            first_host_port = None
+            
             for container_port, host_info in ports.items():
                 if host_info:
                     for mapping in host_info:
-                        port_mappings.append(f"{mapping['HostPort']}:{container_port}")
+                        host_port = mapping['HostPort']
+                        port_mappings.append(f"{host_port}:{container_port}")
+                        # Capture the first mapped port for URL building
+                        if first_host_port is None:
+                            first_host_port = host_port
                 else:
                     port_mappings.append(container_port)
+            
             container_info['ports'] = port_mappings
+            
+            # Build URL for first exposed port if container is running
+            container_info['first_port_url'] = None
+            if container.status == 'running' and first_host_port:
+                host_url = os.getenv('HOST_URL', 'localhost')
+                # Remove protocol if present, we'll add http://
+                if host_url.startswith(('http://', 'https://')):
+                    host_url = host_url.split('://', 1)[1]
+                container_info['first_port_url'] = f"http://{host_url}:{first_host_port}"
+                
         except Exception as port_error:
             logger.warning(f"Could not get port info for container {container.name}: {port_error}")
         
