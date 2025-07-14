@@ -1,11 +1,11 @@
 <div class="col-lg-6 col-xl-4 mb-4">
-    <div class="card container-card h-100">
-        <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card container-card h-100" data-container-id="{{ container.id }}">
+        <div class="card-header d-flex justify-content-between align-items-center" style="cursor: pointer;" onclick="toggleCardBody(this)">
             <h6 class="mb-0 d-flex align-items-center">
                 <img src="{{ container.icon_url }}" alt="Container Icon" class="container-icon me-2" 
                      onerror="this.src='https://cdn.jsdelivr.net/gh/selfhst/icons/png/docker.png';">
                 {% if container.first_port_url %}
-                <a href="{{ container.first_port_url }}" target="_blank" class="text-decoration-none text-dark">
+                <a href="{{ container.first_port_url }}" target="_blank" class="text-decoration-none text-dark" onclick="event.stopPropagation();">
                     {{ container.name }}
                     <i class="fas fa-external-link-alt ms-1 text-muted" style="font-size: 0.75em;"></i>
                 </a>
@@ -14,17 +14,15 @@
                 {% endif %}
             </h6>
             <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-{% if container.status == 'running' %}success{% elif container.status == 'exited' %}danger{% elif container.status == 'paused' %}warning{% elif container.status == 'created' %}info{% else %}secondary{% endif %}">
-                    {{ container.status }}
-                </span>
                 {% if container.health %}
                 <span class="badge bg-{% if container.health == 'healthy' %}success{% elif container.health == 'unhealthy' %}danger{% elif container.health == 'starting' %}warning{% else %}secondary{% endif %}" title="Health Status">
                     <i class="fas fa-{% if container.health == 'healthy' %}heart{% elif container.health == 'unhealthy' %}heart-broken{% elif container.health == 'starting' %}clock{% else %}question{% endif %} me-1"></i>{{ container.health }}
                 </span>
                 {% endif %}
+                <i class="fas fa-chevron-down toggle-icon" style="transition: transform 0.2s;"></i>
             </div>
         </div>
-        <div class="card-body">
+        <div class="card-body collapse" style="display: none;">
             <div class="mb-2">
                 <strong>ID:</strong> 
                 <code class="text-muted">{{ container.id }}</code>
@@ -38,16 +36,28 @@
                 <small class="text-muted">{{ container.created }}</small>
             </div>
             
-            {% if container.status == 'running' %}
+            {% if container.status == 'running' and stats_enabled %}
             <hr>
             <div class="row text-center">
                 <div class="col-6">
                     <small class="text-muted">Memory</small>
-                    <div><strong>{{ container.memory_usage }}</strong></div>
+                    <div class="memory-usage">
+                        {% if container.memory_usage == 'N/A' %}
+                        <small class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</small>
+                        {% else %}
+                        <strong>{{ container.memory_usage }}</strong>
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="col-6">
                     <small class="text-muted">CPU</small>
-                    <div><strong>{{ container.cpu_percent }}</strong></div>
+                    <div class="cpu-usage">
+                        {% if container.cpu_percent == 'N/A' %}
+                        <small class="text-muted"><i class="fas fa-spinner fa-spin"></i> Loading...</small>
+                        {% else %}
+                        <strong>{{ container.cpu_percent }}</strong>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
             {% endif %}

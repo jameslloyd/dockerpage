@@ -14,6 +14,14 @@
                 <i class="fab fa-docker me-2"></i>
                 Docker Container Dashboard
             </a>
+            {% if hosts_config and current_host_id %}
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/hosts">
+                    <i class="fas fa-server me-1"></i>
+                    Manage Hosts
+                </a>
+            </div>
+            {% endif %}
         </div>
     </nav>
 
@@ -32,20 +40,61 @@
                         <h4>Unable to Connect to Docker</h4>
                         <p class="text-muted mb-4">{{ error }}</p>
                         
+                        {% if hosts_config and current_host_id %}
+                        <!-- Current Host Info -->
+                        <div class="alert alert-warning text-start mb-4">
+                            <h6><i class="fas fa-server me-2"></i>Current Host:</h6>
+                            <strong>{{ hosts_config.hosts[current_host_id].name }}</strong> ({{ current_host_id }})<br>
+                            <code>{{ hosts_config.hosts[current_host_id].host }}</code>
+                            {% if hosts_config.hosts[current_host_id].description %}
+                            <br><small class="text-muted">{{ hosts_config.hosts[current_host_id].description }}</small>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Host Switching Options -->
+                        {% if hosts_config.hosts|length > 1 %}
+                        <div class="alert alert-info text-start mb-4">
+                            <h6><i class="fas fa-exchange-alt me-2"></i>Try Another Host:</h6>
+                            <div class="btn-group-vertical w-100">
+                                {% for host_id, host in hosts_config.hosts.items() %}
+                                {% if host_id != current_host_id %}
+                                <button class="btn btn-outline-primary btn-sm switch-host" data-host-id="{{ host_id }}">
+                                    <i class="fas fa-server me-2"></i>{{ host.name }}
+                                    <small class="text-muted d-block">{{ host.host }}</small>
+                                </button>
+                                {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endif %}
+                        
                         <div class="alert alert-info text-start">
                             <h6><i class="fas fa-info-circle me-2"></i>Troubleshooting:</h6>
                             <ul class="mb-0">
-                                <li>Make sure Docker daemon is running</li>
-                                <li>Check if the Docker socket is accessible</li>
+                                <li>Make sure Docker daemon is running on the target host</li>
+                                <li>Check if the Docker socket/port is accessible</li>
                                 <li>Verify Docker permissions for the application</li>
-                                <li>Ensure the container has access to the Docker socket (if running in a container)</li>
+                                <li>For remote hosts, ensure the port is open and accessible</li>
+                                <li>Check TLS certificate configuration for secure connections</li>
+                                {% if hosts_config %}
+                                <li><a href="/hosts">Manage Docker hosts</a> to add, edit, or test connections</li>
+                                {% endif %}
                             </ul>
                         </div>
                         
-                        <button class="btn btn-primary" onclick="location.reload()">
-                            <i class="fas fa-sync-alt me-2"></i>
-                            Retry Connection
-                        </button>
+                        <div class="btn-group" role="group">
+                            <button class="btn btn-primary" onclick="location.reload()">
+                                <i class="fas fa-sync-alt me-2"></i>
+                                Retry Connection
+                            </button>
+                            {% if hosts_config %}
+                            <a href="/hosts" class="btn btn-outline-secondary">
+                                <i class="fas fa-server me-2"></i>
+                                Manage Hosts
+                            </a>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -53,5 +102,62 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Function to show toast notifications instead of alerts
+        function showToast(type, message) {
+            const toastDiv = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
+            toastDiv.className = `toast align-items-center text-white ${bgClass} border-0 position-fixed`;
+            toastDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            toastDiv.setAttribute('role', 'alert');
+            toastDiv.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
+                </div>
+            `;
+            document.body.appendChild(toastDiv);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (toastDiv.parentElement) {
+                    toastDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // Host switching functionality
+        document.querySelectorAll('.switch-host').forEach(button => {
+            button.addEventListener('click', function() {
+                const hostId = this.dataset.hostId;
+                
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Switching...';
+                
+                fetch(`/api/hosts/${hostId}/switch`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('success', data.message);
+                        location.reload();
+                    } else {
+                        showToast('error', `Error: ${data.error}`);
+                        this.disabled = false;
+                        this.innerHTML = `<i class="fas fa-server me-2"></i>${this.textContent.trim()}`;
+                    }
+                })
+                .catch(error => {
+                    showToast('error', `Error switching host: ${error.message}`);
+                    this.disabled = false;
+                    this.innerHTML = `<i class="fas fa-server me-2"></i>${this.textContent.trim()}`;
+                });
+            });
+        });
+    </script>
 </body>
 </html>

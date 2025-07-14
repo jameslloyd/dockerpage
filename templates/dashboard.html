@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Docker Container Dashboard</title>
+    <title>Docker Container Dashboard{% if current_host.get('host', '').startswith('tcp://') %}{% set tcp_host = current_host.get('host', '') %}{% set ip_address = tcp_host.split('://')[1].split(':')[0] if '://' in tcp_host else '' %}{% if ip_address %} - {{ ip_address }}{% endif %}{% endif %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -53,6 +53,16 @@
             object-fit: contain;
             border-radius: 3px;
         }
+        .card-header {
+            user-select: none;
+        }
+        .card-header:hover {
+            background-color: rgba(0,0,0,0.05) !important;
+        }
+        .toggle-icon {
+            font-size: 0.8em;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -61,8 +71,45 @@
             <a class="navbar-brand" href="/">
                 <i class="fab fa-docker me-2"></i>
                 Docker Container Dashboard
+                {% if current_host.get('host', '').startswith('tcp://') %}
+                    {% set tcp_host = current_host.get('host', '') %}
+                    {% set ip_address = tcp_host.split('://')[1].split(':')[0] if '://' in tcp_host else '' %}
+                    {% if ip_address %}
+                        <small class="text-light ms-2">({{ ip_address }})</small>
+                    {% endif %}
+                {% endif %}
             </a>
-            <div class="navbar-nav ms-auto">
+            <div class="navbar-nav ms-auto d-flex align-items-center">
+                <!-- Host Selector -->
+                <div class="dropdown me-3">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-server me-1"></i>
+                        {{ current_host.get('name', 'Unknown Host') }}
+                    </button>
+                    <ul class="dropdown-menu">
+                        {% for host_id, host in hosts_config.hosts.items() %}
+                        <li>
+                            <a class="dropdown-item {% if host_id == current_host_id %}active{% endif %}" 
+                               href="#" onclick="switchHost('{{ host_id }}')">
+                                <i class="fas fa-server me-2"></i>
+                                {{ host.name }}
+                                {% if host.get('host', '').startswith('tcp://') %}
+                                    {% set tcp_host = host.get('host', '') %}
+                                    {% set ip_address = tcp_host.split('://')[1].split(':')[0] if '://' in tcp_host else '' %}
+                                    {% if ip_address %}
+                                        <small class="text-muted ms-1">({{ ip_address }})</small>
+                                    {% endif %}
+                                {% endif %}
+                                {% if host_id == current_host_id %}
+                                <i class="fas fa-check text-success ms-2"></i>
+                                {% endif %}
+                            </a>
+                        </li>
+                        {% endfor %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/hosts"><i class="fas fa-cog me-2"></i> Manage Hosts</a></li>
+                    </ul>
+                </div>
                 <span class="navbar-text">
                     <i class="fas fa-clock me-1"></i>
                     {{ stats.system_time }}
@@ -132,7 +179,7 @@
 
         <!-- Container Tabs -->
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <ul class="nav nav-tabs card-header-tabs" id="containerTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link active" id="running-tab" data-bs-toggle="tab" data-bs-target="#running" type="button" role="tab" aria-controls="running" aria-selected="true">
@@ -169,6 +216,14 @@
                         </button>
                     </li>
                 </ul>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary" onclick="expandAllCards()" title="Expand all container cards (Ctrl+E)">
+                        <i class="fas fa-expand-alt"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="collapseAllCards()" title="Collapse all container cards (Ctrl+R)">
+                        <i class="fas fa-compress-alt"></i>
+                    </button>
+                </div>
             </div>
             <div class="card-body">
                 <div class="tab-content" id="containerTabContent">
@@ -507,6 +562,32 @@
             `;
         }
         
+        // Function to show toast notifications instead of alerts
+        function showToast(type, message) {
+            const toastDiv = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
+            toastDiv.className = `toast align-items-center text-white ${bgClass} border-0 position-fixed`;
+            toastDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            toastDiv.setAttribute('role', 'alert');
+            toastDiv.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
+                </div>
+            `;
+            document.body.appendChild(toastDiv);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (toastDiv.parentElement) {
+                    toastDiv.remove();
+                }
+            }, 5000);
+        }
+
         // Auto-refresh every 30 seconds
         setTimeout(function() {
             location.reload();
@@ -515,6 +596,132 @@
         // Add loading indicator on refresh
         document.querySelector('.refresh-btn').addEventListener('click', function() {
             this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        });
+        
+        // Load container stats asynchronously for better initial page load performance
+        function loadContainerStats() {
+            fetch('/api/containers/stats')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.warn('Failed to load container stats:', data.error);
+                        return;
+                    }
+                    
+                    // Update stats for each container
+                    Object.entries(data).forEach(([containerId, stats]) => {
+                        const containerCards = document.querySelectorAll(`[data-container-id="${containerId}"]`);
+                        containerCards.forEach(card => {
+                            const memoryElement = card.querySelector('.memory-usage');
+                            const cpuElement = card.querySelector('.cpu-usage');
+                            
+                            if (memoryElement && stats.memory_usage !== 'N/A') {
+                                memoryElement.innerHTML = `<strong>${stats.memory_usage}</strong>`;
+                            }
+                            if (cpuElement && stats.cpu_percent !== 'N/A') {
+                                cpuElement.innerHTML = `<strong>${stats.cpu_percent}</strong>`;
+                            }
+                        });
+                    });
+                })
+                .catch(error => {
+                    console.warn('Failed to load container stats:', error);
+                });
+        }
+        
+        // Only load stats if stats collection is enabled
+        {% if stats_enabled %}
+        // Load stats after a short delay to allow the page to render first
+        setTimeout(loadContainerStats, 1000);
+        
+        // Refresh stats every 10 seconds for running containers
+        setInterval(loadContainerStats, 10000);
+        {% endif %}
+        
+        // Function to toggle container card body visibility
+        function toggleCardBody(headerElement) {
+            const cardBody = headerElement.nextElementSibling;
+            const toggleIcon = headerElement.querySelector('.toggle-icon');
+            
+            if (cardBody.style.display === 'none') {
+                cardBody.style.display = 'block';
+                toggleIcon.style.transform = 'rotate(180deg)';
+                // Add expanded class for potential animations
+                cardBody.classList.add('show');
+            } else {
+                cardBody.style.display = 'none';
+                toggleIcon.style.transform = 'rotate(0deg)';
+                cardBody.classList.remove('show');
+            }
+        }
+        
+        // Function to expand all container cards
+        function expandAllCards() {
+            const allCardBodies = document.querySelectorAll('.container-card .card-body');
+            const allToggleIcons = document.querySelectorAll('.container-card .toggle-icon');
+            
+            allCardBodies.forEach(cardBody => {
+                cardBody.style.display = 'block';
+                cardBody.classList.add('show');
+            });
+            
+            allToggleIcons.forEach(icon => {
+                icon.style.transform = 'rotate(180deg)';
+            });
+        }
+        
+        // Function to collapse all container cards
+        function collapseAllCards() {
+            const allCardBodies = document.querySelectorAll('.container-card .card-body');
+            const allToggleIcons = document.querySelectorAll('.container-card .toggle-icon');
+            
+            allCardBodies.forEach(cardBody => {
+                cardBody.style.display = 'none';
+                cardBody.classList.remove('show');
+            });
+            
+            allToggleIcons.forEach(icon => {
+                icon.style.transform = 'rotate(0deg)';
+            });
+        }
+        
+        // Function to switch Docker host
+        function switchHost(hostId) {
+            // Remove confirmation dialog and switch directly
+            fetch(`/api/hosts/${hostId}/switch`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message briefly before reload
+                    showToast('success', data.message);
+                    
+                    // Reload after a short delay
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    showToast('error', `Error switching host: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                showToast('error', `Error switching host: ${error.message}`);
+            });
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Ctrl+E to expand all cards
+            if (e.ctrlKey && e.key === 'e') {
+                e.preventDefault();
+                expandAllCards();
+            }
+            // Ctrl+R to collapse all cards (override default refresh)
+            if (e.ctrlKey && e.key === 'r') {
+                e.preventDefault();
+                collapseAllCards();
+            }
         });
     </script>
 </body>

@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Hosts Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .host-card {
+            transition: transform 0.2s;
+            border-left: 4px solid #dee2e6;
+        }
+        .host-card:hover {
+            transform: translateY(-2px);
+        }
+        .host-card.active {
+            border-left-color: #28a745;
+            background-color: #f8fff9;
+        }
+        .host-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        .connection-status {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .status-connected { background-color: #28a745; }
+        .status-disconnected { background-color: #dc3545; }
+        .status-testing { background-color: #ffc107; animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fab fa-docker"></i> Docker Dashboard
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a>
+                <a class="nav-link active" href="/hosts">
+                    <i class="fas fa-server"></i> Hosts
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="fas fa-server"></i> Docker Hosts Management</h2>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addHostModal">
+                        <i class="fas fa-plus"></i> Add Host
+                    </button>
+                </div>
+
+                <!-- Current Host Info -->
+                <div class="alert alert-info mb-4">
+                    <h5><i class="fas fa-info-circle"></i> Current Active Host</h5>
+                    <strong>{{ current_host.get('name', 'Unknown') }}</strong> 
+                    ({{ current_host_id }}) - {{ current_host.get('host', 'N/A') }}
+                    {% if current_host.get('description') %}
+                    <br><small class="text-muted">{{ current_host.get('description') }}</small>
+                    {% endif %}
+                </div>
+
+                <!-- Hosts List -->
+                <div class="row" id="hosts-container">
+                    {% for host_id, host in hosts_config.hosts.items() %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card host-card position-relative {% if host_id == current_host_id %}active{% endif %}" data-host-id="{{ host_id }}">
+                            <div class="host-status">
+                                <span class="connection-status status-disconnected" id="status-{{ host_id }}"></span>
+                            </div>
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    {{ host.name }}
+                                    {% if host_id == current_host_id %}
+                                    <span class="badge bg-success ms-2">Active</span>
+                                    {% endif %}
+                                </h5>
+                                <p class="card-text">
+                                    <strong>Host:</strong> {{ host.host }}<br>
+                                    <strong>TLS:</strong> {% if host.tls_verify %}Yes{% else %}No{% endif %}<br>
+                                    {% if host.description %}
+                                    <strong>Description:</strong> {{ host.description }}<br>
+                                    {% endif %}
+                                </p>
+                                <div class="host-info" id="info-{{ host_id }}" style="display: none;">
+                                    <hr>
+                                    <small class="text-muted">
+                                        <div id="host-details-{{ host_id }}"></div>
+                                    </small>
+                                </div>
+                                <div class="btn-group w-100" role="group">
+                                    <button class="btn btn-outline-primary btn-sm test-host" data-host-id="{{ host_id }}">
+                                        <i class="fas fa-plug"></i> Test
+                                    </button>
+                                    {% if host_id != current_host_id %}
+                                    <button class="btn btn-outline-success btn-sm switch-host" data-host-id="{{ host_id }}">
+                                        <i class="fas fa-exchange-alt"></i> Switch
+                                    </button>
+                                    {% endif %}
+                                    <button class="btn btn-outline-secondary btn-sm edit-host" data-host-id="{{ host_id }}">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </button>
+                                    {% if host_id != current_host_id and hosts_config.hosts|length > 1 %}
+                                    <button class="btn btn-outline-danger btn-sm delete-host" data-host-id="{{ host_id }}">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Host Modal -->
+    <div class="modal fade" id="addHostModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add Docker Host</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addHostForm">
+                        <div class="mb-3">
+                            <label for="hostId" class="form-label">Host ID</label>
+                            <input type="text" class="form-control" id="hostId" required 
+                                   placeholder="e.g., production, staging, remote1">
+                            <div class="form-text">Unique identifier for this host (letters, numbers, hyphens, underscores only)</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="hostName" class="form-label">Display Name</label>
+                            <input type="text" class="form-control" id="hostName" required 
+                                   placeholder="e.g., Production Server">
+                        </div>
+                        <div class="mb-3">
+                            <label for="hostUrl" class="form-label">Docker Host URL</label>
+                            <input type="text" class="form-control" id="hostUrl" required 
+                                   placeholder="e.g., tcp://192.168.1.100:2376 or unix:///var/run/docker.sock">
+                            <div class="form-text">
+                                Examples:<br>
+                                • Local: unix:///var/run/docker.sock<br>
+                                • Remote TCP: tcp://192.168.1.100:2376<br>
+                                • Remote TLS: tcp://192.168.1.100:2376<br>
+                                • SSH: ssh://user@192.168.1.100
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="tlsVerify">
+                                <label class="form-check-label" for="tlsVerify">
+                                    Enable TLS Verification
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mb-3" id="certPathGroup" style="display: none;">
+                            <label for="certPath" class="form-label">Certificate Path</label>
+                            <input type="text" class="form-control" id="certPath" 
+                                   placeholder="/path/to/docker/certs">
+                            <div class="form-text">Path to directory containing cert.pem, key.pem, and ca.pem</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="hostDescription" class="form-label">Description (Optional)</label>
+                            <textarea class="form-control" id="hostDescription" rows="2" 
+                                      placeholder="Brief description of this Docker host"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="saveHost">Add Host</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Host Modal -->
+    <div class="modal fade" id="editHostModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Docker Host</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editHostForm">
+                        <input type="hidden" id="editHostId">
+                        <div class="mb-3">
+                            <label for="editHostName" class="form-label">Display Name</label>
+                            <input type="text" class="form-control" id="editHostName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editHostUrl" class="form-label">Docker Host URL</label>
+                            <input type="text" class="form-control" id="editHostUrl" required>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="editTlsVerify">
+                                <label class="form-check-label" for="editTlsVerify">
+                                    Enable TLS Verification
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mb-3" id="editCertPathGroup" style="display: none;">
+                            <label for="editCertPath" class="form-label">Certificate Path</label>
+                            <input type="text" class="form-control" id="editCertPath">
+                        </div>
+                        <div class="mb-3">
+                            <label for="editHostDescription" class="form-label">Description (Optional)</label>
+                            <textarea class="form-control" id="editHostDescription" rows="2"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="updateHost">Update Host</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Function to show toast notifications instead of alerts
+        function showToast(type, message) {
+            const toastDiv = document.createElement('div');
+            const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : 'bg-info';
+            toastDiv.className = `toast align-items-center text-white ${bgClass} border-0 position-fixed`;
+            toastDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            toastDiv.setAttribute('role', 'alert');
+            toastDiv.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+                        ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
+                </div>
+            `;
+            document.body.appendChild(toastDiv);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (toastDiv.parentElement) {
+                    toastDiv.remove();
+                }
+            }, 5000);
+        }
+
+        // Show/hide certificate path based on TLS checkbox
+        document.getElementById('tlsVerify').addEventListener('change', function() {
+            document.getElementById('certPathGroup').style.display = this.checked ? 'block' : 'none';
+        });
+        
+        document.getElementById('editTlsVerify').addEventListener('change', function() {
+            document.getElementById('editCertPathGroup').style.display = this.checked ? 'block' : 'none';
+        });
+
+        // Test host connection
+        document.querySelectorAll('.test-host').forEach(button => {
+            button.addEventListener('click', function() {
+                const hostId = this.dataset.hostId;
+                const statusIndicator = document.getElementById(`status-${hostId}`);
+                const infoDiv = document.getElementById(`info-${hostId}`);
+                const detailsDiv = document.getElementById(`host-details-${hostId}`);
+                
+                // Set testing status
+                statusIndicator.className = 'connection-status status-testing';
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+                
+                fetch(`/api/hosts/${hostId}/test`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        statusIndicator.className = 'connection-status status-connected';
+                        detailsDiv.innerHTML = `
+                            <strong>Docker Version:</strong> ${data.docker_version}<br>
+                            <strong>API Version:</strong> ${data.api_version}<br>
+                            <strong>System:</strong> ${data.system_name} (${data.os})<br>
+                            <strong>Architecture:</strong> ${data.architecture}<br>
+                            <strong>Containers:</strong> ${data.containers}<br>
+                            <strong>Images:</strong> ${data.images}
+                        `;
+                        infoDiv.style.display = 'block';
+                    } else {
+                        statusIndicator.className = 'connection-status status-disconnected';
+                        detailsDiv.innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
+                        infoDiv.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    statusIndicator.className = 'connection-status status-disconnected';
+                    detailsDiv.innerHTML = `<span class="text-danger">Connection failed: ${error.message}</span>`;
+                    infoDiv.style.display = 'block';
+                })
+                .finally(() => {
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-plug"></i> Test';
+                });
+            });
+        });
+
+        // Switch host
+        document.querySelectorAll('.switch-host').forEach(button => {
+            button.addEventListener('click', function() {
+                const hostId = this.dataset.hostId;
+                
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Switching...';
+                
+                fetch(`/api/hosts/${hostId}/switch`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('success', data.message);
+                        location.reload(); // Reload to update the UI
+                    } else {
+                        showToast('error', `Error: ${data.error}`);
+                    }
+                })
+                .catch(error => {
+                    showToast('error', `Error switching host: ${error.message}`);
+                })
+                .finally(() => {
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-exchange-alt"></i> Switch';
+                });
+            });
+        });
+
+        // Add host
+        document.getElementById('saveHost').addEventListener('click', function() {
+            const form = document.getElementById('addHostForm');
+            const formData = new FormData(form);
+            
+            const hostData = {
+                id: document.getElementById('hostId').value.trim(),
+                name: document.getElementById('hostName').value.trim(),
+                host: document.getElementById('hostUrl').value.trim(),
+                tls_verify: document.getElementById('tlsVerify').checked,
+                cert_path: document.getElementById('certPath').value.trim(),
+                description: document.getElementById('hostDescription').value.trim()
+            };
+            
+            // Basic validation
+            if (!hostData.id || !hostData.name || !hostData.host) {
+                showToast('error', 'Please fill in all required fields');
+                return;
+            }
+            
+            // Validate host ID format
+            if (!/^[a-zA-Z0-9_-]+$/.test(hostData.id)) {
+                showToast('error', 'Host ID can only contain letters, numbers, hyphens, and underscores');
+                return;
+            }
+            
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            
+            fetch('/api/hosts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(hostData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('success', data.message);
+                    location.reload();
+                } else {
+                    showToast('error', `Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                showToast('error', `Error adding host: ${error.message}`);
+            })
+            .finally(() => {
+                this.disabled = false;
+                this.innerHTML = 'Add Host';
+            });
+        });
+
+        // Edit host
+        document.querySelectorAll('.edit-host').forEach(button => {
+            button.addEventListener('click', function() {
+                const hostId = this.dataset.hostId;
+                
+                // Get host data and populate edit form
+                fetch('/api/hosts')
+                .then(response => response.json())
+                .then(data => {
+                    const host = data.hosts[hostId];
+                    if (host) {
+                        document.getElementById('editHostId').value = hostId;
+                        document.getElementById('editHostName').value = host.name;
+                        document.getElementById('editHostUrl').value = host.host;
+                        document.getElementById('editTlsVerify').checked = host.tls_verify;
+                        document.getElementById('editCertPath').value = host.cert_path || '';
+                        document.getElementById('editHostDescription').value = host.description || '';
+                        
+                        // Show/hide cert path
+                        document.getElementById('editCertPathGroup').style.display = host.tls_verify ? 'block' : 'none';
+                        
+                        // Show modal
+                        new bootstrap.Modal(document.getElementById('editHostModal')).show();
+                    }
+                });
+            });
+        });
+
+        // Update host
+        document.getElementById('updateHost').addEventListener('click', function() {
+            const hostId = document.getElementById('editHostId').value;
+            
+            const hostData = {
+                name: document.getElementById('editHostName').value.trim(),
+                host: document.getElementById('editHostUrl').value.trim(),
+                tls_verify: document.getElementById('editTlsVerify').checked,
+                cert_path: document.getElementById('editCertPath').value.trim(),
+                description: document.getElementById('editHostDescription').value.trim()
+            };
+            
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+            
+            fetch(`/api/hosts/${hostId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(hostData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showToast('success', data.message);
+                    location.reload();
+                } else {
+                    showToast('error', `Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                showToast('error', `Error updating host: ${error.message}`);
+            })
+            .finally(() => {
+                this.disabled = false;
+                this.innerHTML = 'Update Host';
+            });
+        });
+
+        // Delete host
+        document.querySelectorAll('.delete-host').forEach(button => {
+            button.addEventListener('click', function() {
+                const hostId = this.dataset.hostId;
+                
+                // Remove confirmation dialog and delete directly
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+                
+                fetch(`/api/hosts/${hostId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showToast('success', data.message);
+                        location.reload();
+                    } else {
+                        showToast('error', `Error: ${data.error}`);
+                    }
+                })
+                .catch(error => {
+                    showToast('error', `Error deleting host: ${error.message}`);
+                })
+                    .finally(() => {
+                        this.disabled = false;
+                        this.innerHTML = '<i class="fas fa-trash"></i> Delete';
+                    });
+                }
+            });
+        });
+
+        // Test all hosts on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.test-host').forEach(button => {
+                // Auto-test each host with a small delay
+                setTimeout(() => {
+                    button.click();
+                }, Math.random() * 2000);
+            });
+        });
+    </script>
+</body>
+</html>
