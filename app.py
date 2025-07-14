@@ -7,7 +7,11 @@ A Flask web application that displays running Docker containers and their attrib
 import docker
 from flask import Flask, render_template, jsonify
 from datetime import datetime
-import logging
+import logging, os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -221,7 +225,7 @@ def index():
             'system_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
         
-        return render_template('dashboard.html', containers_by_status=containers_by_status, stats=stats)
+        return render_template('dashboard.html', containers_by_status=containers_by_status, stats=stats, hosturl=os.getenv('HOST_URL', 'http://localhost:5000'))
     
     except Exception as e:
         logger.error(f"Error retrieving container information: {e}")
