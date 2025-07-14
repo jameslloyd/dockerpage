@@ -163,11 +163,64 @@ case "${1:-}" in
         echo "✅ Starting gunicorn server on port 5000..."
         echo "💡 Logs will be written to ./logs/ directory"
         echo "🌐 Dashboard will be available at: http://localhost:5000"
-        echo "🛑 Press Ctrl+C to stop the server"
+        echo "� To disable stats collection if experiencing issues: export DISABLE_STATS=true"
+        echo "�🛑 Press Ctrl+C to stop the server"
         echo ""
         
         # Start gunicorn with proper logging to local directory
         gunicorn \
+            --bind 0.0.0.0:5000 \
+            --workers 4 \
+            --timeout 120 \
+            --access-logfile ./logs/access.log \
+            --error-logfile ./logs/error.log \
+            --log-level info \
+            --capture-output \
+            app:app
+        ;;
+    "prod-no-stats")
+        echo "🚀 Starting production mode (stats disabled)..."
+        echo "Installing dependencies..."
+        pip3 install -r requirements.txt
+        
+        # Check Docker socket permissions
+        echo "🔍 Checking Docker socket permissions..."
+        if [ -S /var/run/docker.sock ]; then
+            echo "✅ Docker socket found"
+            ls -la /var/run/docker.sock
+            
+            # Test Docker connection
+            if python3 -c "import docker; docker.from_env().ping()" 2>/dev/null; then
+                echo "✅ Docker connection successful"
+            else
+                echo "⚠️  Docker connection test failed - checking permissions..."
+                echo "💡 Note: 'Could not adjust Docker socket permissions' messages are normal in some environments"
+                
+                # Try to add user to docker group
+                if ! groups $USER | grep -q docker; then
+                    echo "Adding $USER to docker group..."
+                    sudo usermod -aG docker $USER
+                    echo "⚠️  Please log out and log back in, then run this script again"
+                    exit 0
+                fi
+            fi
+        else
+            echo "❌ Docker socket not found at /var/run/docker.sock"
+            exit 1
+        fi
+        
+        # Create logs directory in current directory if it doesn't exist
+        mkdir -p logs
+        
+        echo "✅ Starting gunicorn server on port 5000 (stats disabled)..."
+        echo "💡 Logs will be written to ./logs/ directory"
+        echo "🌐 Dashboard will be available at: http://localhost:5000"
+        echo "⚡ Stats collection is disabled for better performance"
+        echo "🛑 Press Ctrl+C to stop the server"
+        echo ""
+        
+        # Start gunicorn with stats disabled
+        DISABLE_STATS=true gunicorn \
             --bind 0.0.0.0:5000 \
             --workers 4 \
             --timeout 120 \
@@ -219,26 +272,28 @@ case "${1:-}" in
         echo "🌐 Dashboard available at: http://localhost:5000"
         ;;
     *)
-        echo "Usage: $0 {build|compose|stop|logs|status|dev|prod|install}"
+        echo "Usage: $0 {build|compose|stop|logs|status|dev|prod|prod-no-stats|install}"
         echo ""
         echo "Commands:"
-        echo "  build    - Build and run with Docker"
-        echo "  compose  - Build and run with Docker Compose"
-        echo "  stop     - Stop and cleanup containers"
-        echo "  logs     - Show container logs"
-        echo "  status   - Show current status"
-        echo "  dev      - Run in development mode (local Python)"
-        echo "  prod     - Run in production mode with gunicorn"
-        echo "  install  - Install as system service (requires sudo)"
+        echo "  build         - Build and run with Docker"
+        echo "  compose       - Build and run with Docker Compose"
+        echo "  stop          - Stop and cleanup containers"
+        echo "  logs          - Show container logs"
+        echo "  status        - Show current status"
+        echo "  dev           - Run in development mode (local Python)"
+        echo "  prod          - Run in production mode with gunicorn"
+        echo "  prod-no-stats - Run in production mode with stats disabled"
+        echo "  install       - Install as system service (requires sudo)"
         echo ""
         echo "Examples:"
-        echo "  $0 compose        # Recommended for Docker deployment"
-        echo "  $0 prod           # Recommended for server deployment"
-        echo "  sudo $0 install   # Install as system service"
-        echo "  $0 build          # Direct Docker build"
-        echo "  $0 status         # Check if running"
-        echo "  $0 logs           # View logs"
-        echo "  $0 stop           # Stop everything"
+        echo "  $0 compose         # Recommended for Docker deployment"
+        echo "  $0 prod            # Recommended for server deployment"
+        echo "  $0 prod-no-stats   # If experiencing stats collection issues"
+        echo "  sudo $0 install    # Install as system service"
+        echo "  $0 build           # Direct Docker build"
+        echo "  $0 status          # Check if running"
+        echo "  $0 logs            # View logs"
+        echo "  $0 stop            # Stop everything"
         exit 1
         ;;
 esac

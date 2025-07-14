@@ -77,35 +77,59 @@ def format_container_info(container):
             'restart_policy': container.attrs['HostConfig']['RestartPolicy']['Name']
         }
         
-        # Only get stats for running containers
-        if container.status == 'running':
+        # Only get stats for running containers if stats collection is enabled
+        # Stats collection can be disabled via DISABLE_STATS=true environment variable
+        if container.status == 'running' and not os.getenv('DISABLE_STATS', '').lower() == 'true':
             try:
-                stats = container.stats(stream=False)
+                import threading
+                import queue
                 
-                # Calculate memory usage
-                if 'memory' in stats and 'usage' in stats['memory']:
-                    memory_usage = stats['memory']['usage'] / (1024 * 1024)  # Convert to MB
-                    memory_limit = stats['memory']['limit'] / (1024 * 1024)  # Convert to MB
-                    container_info['memory_usage'] = f"{memory_usage:.1f} MB"
-                    if memory_limit > 0:
-                        container_info['memory_limit'] = f"{memory_limit:.1f} MB"
+                def get_stats(container, result_queue):
+                    """Get container stats in a separate thread"""
+                    try:
+                        stats = container.stats(stream=False)
+                        result_queue.put(stats)
+                    except Exception as e:
+                        result_queue.put(None)
                 
-                # Calculate CPU usage
-                if 'cpu_stats' in stats and 'precpu_stats' in stats:
-                    cpu_stats = stats['cpu_stats']
-                    precpu_stats = stats['precpu_stats']
-                    
-                    if ('cpu_usage' in cpu_stats and 'cpu_usage' in precpu_stats and
-                        'total_usage' in cpu_stats['cpu_usage'] and 'total_usage' in precpu_stats['cpu_usage']):
-                        cpu_delta = cpu_stats['cpu_usage']['total_usage'] - precpu_stats['cpu_usage']['total_usage']
-                        system_delta = cpu_stats['system_cpu_usage'] - precpu_stats['system_cpu_usage']
+                # Use threading with timeout to prevent hanging
+                result_queue = queue.Queue()
+                stats_thread = threading.Thread(target=get_stats, args=(container, result_queue))
+                stats_thread.daemon = True
+                stats_thread.start()
+                
+                # Wait for result with 2 second timeout
+                try:
+                    stats = result_queue.get(timeout=2)
+                    if stats:
+                        # Calculate memory usage
+                        if 'memory' in stats and 'usage' in stats['memory']:
+                            memory_usage = stats['memory']['usage'] / (1024 * 1024)  # Convert to MB
+                            memory_limit = stats['memory']['limit'] / (1024 * 1024)  # Convert to MB
+                            container_info['memory_usage'] = f"{memory_usage:.1f} MB"
+                            if memory_limit > 0:
+                                container_info['memory_limit'] = f"{memory_limit:.1f} MB"
                         
-                        if system_delta > 0:
-                            cpu_percent = (cpu_delta / system_delta) * len(cpu_stats['cpu_usage']['percpu_usage']) * 100
-                            container_info['cpu_percent'] = f"{cpu_percent:.1f}%"
+                        # Calculate CPU usage
+                        if 'cpu_stats' in stats and 'precpu_stats' in stats:
+                            cpu_stats = stats['cpu_stats']
+                            precpu_stats = stats['precpu_stats']
+                            
+                            if ('cpu_usage' in cpu_stats and 'cpu_usage' in precpu_stats and
+                                'total_usage' in cpu_stats['cpu_usage'] and 'total_usage' in precpu_stats['cpu_usage']):
+                                cpu_delta = cpu_stats['cpu_usage']['total_usage'] - precpu_stats['cpu_usage']['total_usage']
+                                system_delta = cpu_stats['system_cpu_usage'] - precpu_stats['system_cpu_usage']
+                                
+                                if system_delta > 0:
+                                    cpu_percent = (cpu_delta / system_delta) * len(cpu_stats['cpu_usage']['percpu_usage']) * 100
+                                    container_info['cpu_percent'] = f"{cpu_percent:.1f}%"
+                
+                except queue.Empty:
+                    logger.debug(f"Stats collection timed out for container {container.name}")
                             
             except Exception as stats_error:
-                logger.warning(f"Could not get stats for container {container.name}: {stats_error}")
+                logger.debug(f"Could not get stats for container {container.name}: {stats_error}")
+                # Continue without stats - this is not critical
         
         # Get network information
         try:
