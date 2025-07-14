@@ -45,94 +45,139 @@ from api_routes import (
 
 @app.route('/')
 def index():
-    """Main dashboard page."""
+    """Main dashboard page showing containers from all configured hosts."""
     logger.info("Starting index route")
     
-    # Get current host info
+    # Get host configurations
     hosts_config = load_docker_hosts()
     current_host_id = get_current_host_id()
-    current_host = hosts_config['hosts'].get(current_host_id, {})
     
-    client = get_docker_client()
-    if not client:
-        logger.error("Failed to get Docker client")
-        return render_template('error.html', 
-                             error=f"Unable to connect to Docker daemon on host '{current_host.get('name', current_host_id)}'. Make sure Docker is running and accessible.",
-                             hosts_config=hosts_config,
-                             current_host_id=current_host_id)
+    # Get containers from all hosts
+    all_hosts_data = {}
+    global_stats = {
+        'total_containers': 0,
+        'running_containers': 0,
+        'exited_containers': 0,
+        'created_containers': 0,
+        'paused_containers': 0,
+        'other_containers': 0,
+        'total_images': 0,
+        'connected_hosts': 0,
+        'total_hosts': len(hosts_config['hosts']),
+        'system_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
     
-    try:
-        logger.info("Getting container lists")
-        # Get all containers (running and stopped)
-        all_containers = client.containers.list(all=True)
-        running_containers = client.containers.list()
-        logger.info(f"Found {len(all_containers)} total containers, {len(running_containers)} running")
+    # Use lightweight formatting for faster initial load
+    use_lightweight = os.getenv('FAST_INITIAL_LOAD', 'true').lower() == 'true'
+    
+    # Iterate through all configured hosts
+    for host_id, host_config in hosts_config['hosts'].items():
+        logger.info(f"Getting containers from host: {host_config.get('name', host_id)}")
         
-        # Format container information and group by status
-        containers_by_status = {
-            'running': [],
-            'exited': [],
-            'created': [],
-            'paused': [],
-            'other': []
+        # Initialize host data structure
+        host_data = {
+            'config': host_config,
+            'connected': False,
+            'error': None,
+            'containers_by_status': {
+                'running': [],
+                'exited': [],
+                'created': [],
+                'paused': [],
+                'other': []
+            },
+            'stats': {
+                'total_containers': 0,
+                'running_containers': 0,
+                'exited_containers': 0,
+                'created_containers': 0,
+                'paused_containers': 0,
+                'other_containers': 0,
+                'total_images': 0,
+                'docker_version': 'N/A'
+            }
         }
         
-        logger.info("Processing container information")
-        
-        # Use lightweight formatting for faster initial load
-        use_lightweight = os.getenv('FAST_INITIAL_LOAD', 'true').lower() == 'true'
-        
-        for i, container in enumerate(all_containers):
-            logger.info(f"Processing container {i+1}/{len(all_containers)}: {container.name}")
+        try:
+            # Get Docker client for this specific host
+            client = get_docker_client(host_id)
+            if not client:
+                host_data['error'] = "Unable to connect to Docker daemon"
+                logger.warning(f"Failed to connect to host {host_id}")
+                all_hosts_data[host_id] = host_data
+                continue
             
-            if use_lightweight:
-                container_info = format_container_info_lightweight(container, current_host)
-            else:
-                container_info = format_container_info(container, current_host)
+            # Test connection and get system info
+            system_info = client.info()
+            host_data['connected'] = True
+            global_stats['connected_hosts'] += 1
+            
+            # Get all containers (running and stopped)
+            all_containers = client.containers.list(all=True)
+            running_containers = client.containers.list()
+            
+            logger.info(f"Host {host_id}: Found {len(all_containers)} total containers, {len(running_containers)} running")
+            
+            # Process container information
+            for i, container in enumerate(all_containers):
+                if use_lightweight:
+                    container_info = format_container_info_lightweight(container, host_config)
+                else:
+                    container_info = format_container_info(container, host_config)
                 
-            status = container_info['status']
+                # Add host information to container
+                container_info['host_id'] = host_id
+                container_info['host_name'] = host_config.get('name', host_id)
+                
+                status = container_info['status']
+                if status in host_data['containers_by_status']:
+                    host_data['containers_by_status'][status].append(container_info)
+                else:
+                    host_data['containers_by_status']['other'].append(container_info)
             
-            if status in containers_by_status:
-                containers_by_status[status].append(container_info)
-            else:
-                containers_by_status['other'].append(container_info)
+            # Update host stats
+            host_data['stats'] = {
+                'total_containers': len(all_containers),
+                'running_containers': len(running_containers),
+                'exited_containers': len(host_data['containers_by_status']['exited']),
+                'created_containers': len(host_data['containers_by_status']['created']),
+                'paused_containers': len(host_data['containers_by_status']['paused']),
+                'other_containers': len(host_data['containers_by_status']['other']),
+                'total_images': len(client.images.list()),
+                'docker_version': system_info.get('ServerVersion', 'N/A')
+            }
+            
+            # Update global stats
+            global_stats['total_containers'] += host_data['stats']['total_containers']
+            global_stats['running_containers'] += host_data['stats']['running_containers']
+            global_stats['exited_containers'] += host_data['stats']['exited_containers']
+            global_stats['created_containers'] += host_data['stats']['created_containers']
+            global_stats['paused_containers'] += host_data['stats']['paused_containers']
+            global_stats['other_containers'] += host_data['stats']['other_containers']
+            global_stats['total_images'] += host_data['stats']['total_images']
+            
+        except Exception as e:
+            logger.error(f"Error retrieving container information from host {host_id}: {e}")
+            host_data['error'] = str(e)
         
-        logger.info("Getting Docker system info")
-        # Get Docker system info
-        system_info = client.info()
-        
-        # Don't collect unused resources on initial load for better performance
-        # They will be loaded asynchronously when the user clicks the tab
-        
-        logger.info("Preparing stats")
-        stats = {
-            'total_containers': len(all_containers),
-            'running_containers': len(running_containers),
-            'exited_containers': len(containers_by_status['exited']),
-            'created_containers': len(containers_by_status['created']),
-            'paused_containers': len(containers_by_status['paused']),
-            'other_containers': len(containers_by_status['other']),
-            'docker_version': system_info.get('ServerVersion', 'N/A'),
-            'total_images': len(client.images.list()),
-            'system_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-        
-        logger.info("Rendering template")
-        return render_template('dashboard.html', 
-                             containers_by_status=containers_by_status, 
-                             stats=stats, 
-                             hosturl=os.getenv('HOST_URL', 'http://localhost:5000'),
-                             stats_enabled=stats_enabled,
-                             hosts_config=hosts_config,
-                             current_host_id=current_host_id,
-                             current_host=current_host)
+        all_hosts_data[host_id] = host_data
     
-    except Exception as e:
-        logger.error(f"Error retrieving container information: {e}")
+    # If no hosts are connected, show error
+    if global_stats['connected_hosts'] == 0:
         return render_template('error.html', 
-                             error=str(e),
+                             error="Unable to connect to any configured Docker hosts. Please check your host configurations.",
                              hosts_config=hosts_config,
                              current_host_id=current_host_id)
+    
+    logger.info("Rendering multi-host dashboard template")
+    return render_template('dashboard.html', 
+                         all_hosts_data=all_hosts_data,
+                         global_stats=global_stats,
+                         hosturl=os.getenv('HOST_URL', 'http://localhost:5000'),
+                         stats_enabled=stats_enabled,
+                         hosts_config=hosts_config,
+                         current_host_id=current_host_id,
+                         multi_host_view=True)
 
 @app.route('/hosts')
 def hosts_management():

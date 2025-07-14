@@ -116,10 +116,32 @@
     background-color: #f8fff9;
 }
 
+/* Multi-host styling */
+.host-card {
+    border-left: 4px solid #007bff;
+}
+
+.host-card.connected {
+    border-left-color: #28a745;
+}
+
+.host-card.disconnected {
+    border-left-color: #dc3545;
+}
+
 .host-status {
     position: absolute;
     top: 10px;
     right: 10px;
+}
+
+.host-stats {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.host-name {
+    font-weight: 600;
 }
 
 /* ========================================
@@ -199,4 +221,9 @@
         font-size: 0.9em;
         padding: 0.5rem 0.75rem;
     }
+}
+
+/* Container cards within hosts */
+.host-containers .container-card {
+    margin-bottom: 1rem;
 }
