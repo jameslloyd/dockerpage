@@ -1,0 +1,25 @@
+[Unit]
+Description=Docker Container Dashboard
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=exec
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/dockerpage
+ExecStart=/usr/local/bin/gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 --access-logfile /var/log/dockerpage/access.log --error-logfile /var/log/dockerpage/error.log app:app
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/log/dockerpage
+SupplementaryGroups=docker
+
+[Install]
+WantedBy=multi-user.target

@@ -119,8 +119,107 @@ case "${1:-}" in
         echo "Starting Flask development server..."
         python app.py
         ;;
+    "prod")
+        echo "🚀 Starting production mode..."
+        echo "Installing dependencies..."
+        pip3 install -r requirements.txt
+        
+        # Check Docker socket permissions
+        echo "🔍 Checking Docker socket permissions..."
+        if [ -S /var/run/docker.sock ]; then
+            echo "✅ Docker socket found"
+            ls -la /var/run/docker.sock
+            
+            # Test Docker connection
+            if python3 -c "import docker; docker.from_env().ping()" 2>/dev/null; then
+                echo "✅ Docker connection successful"
+            else
+                echo "⚠️  Docker connection test failed - checking permissions..."
+                echo "💡 Note: 'Could not adjust Docker socket permissions' messages are normal in some environments"
+                
+                # Try to add user to docker group
+                if ! groups $USER | grep -q docker; then
+                    echo "Adding $USER to docker group..."
+                    sudo usermod -aG docker $USER
+                    echo "⚠️  Please log out and log back in, then run this script again"
+                    exit 0
+                fi
+            fi
+        else
+            echo "❌ Docker socket not found at /var/run/docker.sock"
+            exit 1
+        fi
+        
+        echo "Starting production server with gunicorn..."
+        # Install gunicorn if not present
+        if ! command -v gunicorn &> /dev/null; then
+            echo "Installing gunicorn..."
+            pip3 install gunicorn
+        fi
+        
+        # Create logs directory in current directory if it doesn't exist
+        mkdir -p logs
+        
+        echo "✅ Starting gunicorn server on port 5000..."
+        echo "💡 Logs will be written to ./logs/ directory"
+        echo "🌐 Dashboard will be available at: http://localhost:5000"
+        echo "🛑 Press Ctrl+C to stop the server"
+        echo ""
+        
+        # Start gunicorn with proper logging to local directory
+        gunicorn \
+            --bind 0.0.0.0:5000 \
+            --workers 4 \
+            --timeout 120 \
+            --access-logfile ./logs/access.log \
+            --error-logfile ./logs/error.log \
+            --log-level info \
+            --capture-output \
+            app:app
+        ;;
+    "install")
+        echo "🔧 Installing Docker Dashboard as a system service..."
+        
+        # Check if running as root or with sudo
+        if [ "$EUID" -ne 0 ]; then
+            echo "❌ This command requires root privileges. Please run with sudo:"
+            echo "   sudo $0 install"
+            exit 1
+        fi
+        
+        # Install to /opt/dockerpage
+        echo "📁 Installing to /opt/dockerpage..."
+        mkdir -p /opt/dockerpage
+        cp -r . /opt/dockerpage/
+        chown -R www-data:www-data /opt/dockerpage
+        
+        # Create log directory
+        mkdir -p /var/log/dockerpage
+        chown www-data:www-data /var/log/dockerpage
+        
+        # Add www-data to docker group
+        usermod -aG docker www-data
+        
+        # Install Python dependencies
+        cd /opt/dockerpage
+        pip3 install -r requirements.txt
+        pip3 install gunicorn
+        
+        # Install systemd service
+        cp dockerpage.service /etc/systemd/system/
+        systemctl daemon-reload
+        systemctl enable dockerpage
+        systemctl start dockerpage
+        
+        echo "✅ Docker Dashboard installed as system service!"
+        echo "🔧 Service commands:"
+        echo "   sudo systemctl status dockerpage   # Check status"
+        echo "   sudo systemctl restart dockerpage  # Restart service"
+        echo "   sudo systemctl logs dockerpage     # View logs"
+        echo "🌐 Dashboard available at: http://localhost:5000"
+        ;;
     *)
-        echo "Usage: $0 {build|compose|stop|logs|status|dev}"
+        echo "Usage: $0 {build|compose|stop|logs|status|dev|prod|install}"
         echo ""
         echo "Commands:"
         echo "  build    - Build and run with Docker"
@@ -129,13 +228,17 @@ case "${1:-}" in
         echo "  logs     - Show container logs"
         echo "  status   - Show current status"
         echo "  dev      - Run in development mode (local Python)"
+        echo "  prod     - Run in production mode with gunicorn"
+        echo "  install  - Install as system service (requires sudo)"
         echo ""
         echo "Examples:"
-        echo "  $0 compose  # Recommended for most users"
-        echo "  $0 build    # Direct Docker build"
-        echo "  $0 status   # Check if running"
-        echo "  $0 logs     # View logs"
-        echo "  $0 stop     # Stop everything"
+        echo "  $0 compose        # Recommended for Docker deployment"
+        echo "  $0 prod           # Recommended for server deployment"
+        echo "  sudo $0 install   # Install as system service"
+        echo "  $0 build          # Direct Docker build"
+        echo "  $0 status         # Check if running"
+        echo "  $0 logs           # View logs"
+        echo "  $0 stop           # Stop everything"
         exit 1
         ;;
 esac
