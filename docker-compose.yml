@@ -11,8 +11,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - FLASK_ENV=production
-      - HOST_URL=127.0.0.1
-      - DISABLE_STATS=false
+      - HOST_URL=192.168.6.3
+      - ENABLE_STATS=true
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]

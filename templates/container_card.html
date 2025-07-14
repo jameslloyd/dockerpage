@@ -13,9 +13,16 @@
                 {{ container.name }}
                 {% endif %}
             </h6>
-            <span class="badge bg-{% if container.status == 'running' %}success{% elif container.status == 'exited' %}danger{% elif container.status == 'paused' %}warning{% elif container.status == 'created' %}info{% else %}secondary{% endif %}">
-                {{ container.status }}
-            </span>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-{% if container.status == 'running' %}success{% elif container.status == 'exited' %}danger{% elif container.status == 'paused' %}warning{% elif container.status == 'created' %}info{% else %}secondary{% endif %}">
+                    {{ container.status }}
+                </span>
+                {% if container.health %}
+                <span class="badge bg-{% if container.health == 'healthy' %}success{% elif container.health == 'unhealthy' %}danger{% elif container.health == 'starting' %}warning{% else %}secondary{% endif %}" title="Health Status">
+                    <i class="fas fa-{% if container.health == 'healthy' %}heart{% elif container.health == 'unhealthy' %}heart-broken{% elif container.health == 'starting' %}clock{% else %}question{% endif %} me-1"></i>{{ container.health }}
+                </span>
+                {% endif %}
+            </div>
         </div>
         <div class="card-body">
             <div class="mb-2">

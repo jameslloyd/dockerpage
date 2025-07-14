@@ -163,6 +163,11 @@
                         </button>
                     </li>
                     {% endif %}
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="cleanup-tab" data-bs-toggle="tab" data-bs-target="#cleanup" type="button" role="tab" aria-controls="cleanup" aria-selected="false" onclick="loadUnusedResources()">
+                            <i class="fas fa-broom me-2"></i>Unused Resources
+                        </button>
+                    </li>
                 </ul>
             </div>
             <div class="card-body">
@@ -255,6 +260,28 @@
                         {% endif %}
                     </div>
                     {% endif %}
+
+                    <!-- Unused Resources Tab -->
+                    <div class="tab-pane fade" id="cleanup" role="tabpanel" aria-labelledby="cleanup-tab">
+                        <div id="unused-resources-loading" class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <h5 class="mt-3">Loading unused resources...</h5>
+                            <p class="text-muted">Scanning Docker volumes, images, and networks...</p>
+                        </div>
+                        
+                        <div id="unused-resources-content" style="display: none;">
+                            <!-- Content will be loaded here via JavaScript -->
+                        </div>
+                        
+                        <div id="unused-resources-error" style="display: none;">
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <span id="error-message">Error loading unused resources</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -275,6 +302,211 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        let unusedResourcesLoaded = false;
+        
+        // Function to load unused resources asynchronously
+        function loadUnusedResources() {
+            if (unusedResourcesLoaded) {
+                return; // Already loaded
+            }
+            
+            // Show loading indicator
+            document.getElementById('unused-resources-loading').style.display = 'block';
+            document.getElementById('unused-resources-content').style.display = 'none';
+            document.getElementById('unused-resources-error').style.display = 'none';
+            
+            fetch('/api/unused-resources')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    renderUnusedResources(data);
+                    unusedResourcesLoaded = true;
+                })
+                .catch(error => {
+                    console.error('Error loading unused resources:', error);
+                    document.getElementById('unused-resources-loading').style.display = 'none';
+                    document.getElementById('unused-resources-error').style.display = 'block';
+                    document.getElementById('error-message').textContent = 'Error loading unused resources: ' + error.message;
+                });
+        }
+        
+        // Function to render unused resources data
+        function renderUnusedResources(data) {
+            const content = document.getElementById('unused-resources-content');
+            
+            // Check if system is clean
+            const isSystemClean = data.volumes.length === 0 && data.images.length === 0 && data.networks.length === 0;
+            
+            if (isSystemClean) {
+                content.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-broom fa-4x text-success mb-3"></i>
+                        <h4 class="text-success">System Clean!</h4>
+                        <p class="text-muted">No unused Docker resources found. Your system is optimized!</p>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `
+                    <div class="row">
+                        <div class="col-lg-4 mb-4">
+                            ${renderVolumeCard(data.volumes)}
+                        </div>
+                        <div class="col-lg-4 mb-4">
+                            ${renderImageCard(data.images)}
+                        </div>
+                        <div class="col-lg-4 mb-4">
+                            ${renderNetworkCard(data.networks)}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Update tab title with counts
+            const tabButton = document.getElementById('cleanup-tab');
+            const totalUnused = data.volumes.length + data.images.length + data.networks.length;
+            if (totalUnused > 0) {
+                tabButton.innerHTML = `<i class="fas fa-broom me-2"></i>Unused Resources (${totalUnused})`;
+            }
+            
+            document.getElementById('unused-resources-loading').style.display = 'none';
+            document.getElementById('unused-resources-content').style.display = 'block';
+        }
+        
+        // Helper function to render volume card
+        function renderVolumeCard(volumes) {
+            const volumeItems = volumes.map(volume => `
+                <div class="list-group-item px-0">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">${volume.name}</h6>
+                            <p class="mb-1 small text-muted">
+                                <strong>Driver:</strong> ${volume.driver}<br>
+                                <strong>Created:</strong> ${volume.created !== 'N/A' ? volume.created.slice(0, 19) : 'N/A'}
+                            </p>
+                            ${Object.keys(volume.labels || {}).length > 0 ? 
+                                '<div class="small">' + 
+                                Object.entries(volume.labels).map(([key, value]) => 
+                                    `<span class="badge bg-light text-dark me-1">${key}=${value}</span>`
+                                ).join('') + 
+                                '</div>' : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            return `
+                <div class="card h-100">
+                    <div class="card-header bg-warning text-dark">
+                        <h6 class="mb-0">
+                            <i class="fas fa-hdd me-2"></i>
+                            Unused Volumes (${volumes.length})
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        ${volumes.length > 0 ? 
+                            `<div class="list-group list-group-flush">${volumeItems}</div>` :
+                            `<div class="text-center py-4">
+                                <i class="fas fa-hdd fa-3x text-muted mb-2"></i>
+                                <p class="text-muted mb-0">No unused volumes found</p>
+                            </div>`
+                        }
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Helper function to render image card
+        function renderImageCard(images) {
+            const imageItems = images.map(image => `
+                <div class="list-group-item px-0">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">
+                                ${image.tags.slice(0, 2).map(tag => 
+                                    `<span class="badge bg-primary me-1">${tag}</span>`
+                                ).join('')}
+                                ${image.tags.length > 2 ? 
+                                    `<span class="badge bg-secondary">+${image.tags.length - 2} more</span>` : ''}
+                            </h6>
+                            <p class="mb-1 small text-muted">
+                                <strong>ID:</strong> <code>${image.id}</code><br>
+                                <strong>Size:</strong> ${image.size}<br>
+                                <strong>Created:</strong> ${image.created !== 'N/A' ? image.created.slice(0, 19) : 'N/A'}
+                            </p>
+                            ${image.dangling ? '<span class="badge bg-danger">Dangling</span>' : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            return `
+                <div class="card h-100">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0">
+                            <i class="fab fa-docker me-2"></i>
+                            Unused Images (${images.length})
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        ${images.length > 0 ? 
+                            `<div class="list-group list-group-flush">${imageItems}</div>` :
+                            `<div class="text-center py-4">
+                                <i class="fab fa-docker fa-3x text-muted mb-2"></i>
+                                <p class="text-muted mb-0">No unused images found</p>
+                            </div>`
+                        }
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Helper function to render network card
+        function renderNetworkCard(networks) {
+            const networkItems = networks.map(network => `
+                <div class="list-group-item px-0">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">${network.name}</h6>
+                            <p class="mb-1 small text-muted">
+                                <strong>ID:</strong> <code>${network.id}</code><br>
+                                <strong>Driver:</strong> ${network.driver}<br>
+                                <strong>Scope:</strong> ${network.scope}<br>
+                                <strong>Created:</strong> ${network.created !== 'N/A' ? network.created.slice(0, 19) : 'N/A'}
+                            </p>
+                            ${Object.keys(network.labels || {}).length > 0 ? 
+                                '<div class="small">' + 
+                                Object.entries(network.labels).map(([key, value]) => 
+                                    `<span class="badge bg-light text-dark me-1">${key}=${value}</span>`
+                                ).join('') + 
+                                '</div>' : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            return `
+                <div class="card h-100">
+                    <div class="card-header bg-secondary text-white">
+                        <h6 class="mb-0">
+                            <i class="fas fa-network-wired me-2"></i>
+                            Unused Networks (${networks.length})
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        ${networks.length > 0 ? 
+                            `<div class="list-group list-group-flush">${networkItems}</div>` :
+                            `<div class="text-center py-4">
+                                <i class="fas fa-network-wired fa-3x text-muted mb-2"></i>
+                                <p class="text-muted mb-0">No unused networks found</p>
+                            </div>`
+                        }
+                    </div>
+                </div>
+            `;
+        }
+        
         // Auto-refresh every 30 seconds
         setTimeout(function() {
             location.reload();
