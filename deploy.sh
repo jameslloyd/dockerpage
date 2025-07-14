@@ -175,7 +175,6 @@ case "${1:-}" in
             --access-logfile ./logs/access.log \
             --error-logfile ./logs/error.log \
             --log-level info \
-            --capture-output \
             app:app
         ;;
     "prod-no-stats")

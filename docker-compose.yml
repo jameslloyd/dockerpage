@@ -12,6 +12,7 @@ services:
     environment:
       - FLASK_ENV=production
       - HOST_URL=127.0.0.1
+      - DISABLE_STATS=false
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
