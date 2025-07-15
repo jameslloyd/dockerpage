@@ -342,3 +342,4 @@ access.log
 
 # Data directory - user configurations
 data/*.json
+docker-compose.yaml
