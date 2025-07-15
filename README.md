@@ -40,6 +40,8 @@ A beautiful Python Flask web application that displays all running Docker contai
 
 ## Screenshots
 
+![Screenshot](./static/screenshot.png)
+
 The dashboard provides:
 - Summary statistics cards showing total containers, running containers, images, and Docker version
 - Grid layout of container cards with detailed information
