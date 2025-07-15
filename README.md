@@ -211,7 +211,7 @@ ssh -f -N -L 2375:localhost:2375 user@remote-host
 
 #### Host Configuration File
 
-Host configurations are stored in `docker_hosts.json` in the application directory:
+Host configurations are stored in `data/docker_hosts.json` in the application directory:
 
 ```json
 {

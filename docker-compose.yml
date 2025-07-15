@@ -6,6 +6,7 @@ services:
       - "5000:5000"
     volumes:
       # Mount Docker socket to access Docker daemon
+      - ./data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - FLASK_ENV=production

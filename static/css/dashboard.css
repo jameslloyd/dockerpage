@@ -227,3 +227,37 @@
 .host-containers .container-card {
     margin-bottom: 1rem;
 }
+
+/* Self-hosted apps styling */
+.app-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid #dee2e6;
+}
+
+.app-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    border-color: #007bff;
+}
+
+.app-icon {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    border-radius: 6px;
+}
+
+.app-actions {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.app-card:hover .app-actions {
+    opacity: 1;
+}
+
+.app-category {
+    border-left: 4px solid #007bff;
+    padding-left: 15px;
+    margin-bottom: 20px;
+}

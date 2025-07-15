@@ -349,3 +349,89 @@ def api_unused_resources():
     except Exception as e:
         logger.error(f"Error getting unused resources: {e}")
         return jsonify({'error': str(e)}), 500
+
+# Import for self-hosted apps
+from self_hosted_apps import (
+    load_self_hosted_apps, add_app, update_app, delete_app, 
+    get_app, get_apps_by_category
+)
+
+def api_self_hosted_apps():
+    """Get all self-hosted apps."""
+    try:
+        config = load_self_hosted_apps()
+        return jsonify(config)
+    except Exception as e:
+        logger.error(f"Error getting self-hosted apps: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def api_add_self_hosted_app():
+    """Add a new self-hosted app."""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Generate app ID from title
+        app_id = data.get('title', '').lower().replace(' ', '_').replace('-', '_')
+        app_id = ''.join(c for c in app_id if c.isalnum() or c == '_')
+        
+        if not app_id:
+            return jsonify({'error': 'Invalid title for app ID generation'}), 400
+        
+        # Check if app already exists
+        existing_config = load_self_hosted_apps()
+        if app_id in existing_config['apps']:
+            return jsonify({'error': f'App with ID {app_id} already exists'}), 409
+        
+        if add_app(app_id, data):
+            return jsonify({'message': 'App added successfully', 'app_id': app_id}), 201
+        else:
+            return jsonify({'error': 'Failed to add app'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error adding self-hosted app: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def api_update_self_hosted_app(app_id):
+    """Update an existing self-hosted app."""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        if update_app(app_id, data):
+            return jsonify({'message': 'App updated successfully'}), 200
+        else:
+            return jsonify({'error': 'Failed to update app'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error updating self-hosted app {app_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def api_delete_self_hosted_app(app_id):
+    """Delete a self-hosted app."""
+    try:
+        if delete_app(app_id):
+            return jsonify({'message': 'App deleted successfully'}), 200
+        else:
+            return jsonify({'error': 'Failed to delete app'}), 500
+            
+    except Exception as e:
+        logger.error(f"Error deleting self-hosted app {app_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def api_get_self_hosted_app(app_id):
+    """Get a specific self-hosted app."""
+    try:
+        app = get_app(app_id)
+        if app:
+            app_with_id = app.copy()
+            app_with_id['id'] = app_id
+            return jsonify(app_with_id), 200
+        else:
+            return jsonify({'error': 'App not found'}), 404
+            
+    except Exception as e:
+        logger.error(f"Error getting self-hosted app {app_id}: {e}")
+        return jsonify({'error': str(e)}), 500

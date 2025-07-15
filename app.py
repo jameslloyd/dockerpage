@@ -37,10 +37,13 @@ app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-change-in-production')
 from docker_client import get_docker_client
 from docker_hosts import load_docker_hosts, get_current_host_id
 from container_formatter import format_container_info, format_container_info_lightweight
+from self_hosted_apps import load_self_hosted_apps, get_apps_by_category
 from api_routes import (
     api_hosts, api_add_host, api_update_host, api_delete_host, 
     api_switch_host, api_test_host, api_containers, api_container_details,
-    api_container_stats, api_unused_resources
+    api_container_stats, api_unused_resources, api_self_hosted_apps,
+    api_add_self_hosted_app, api_update_self_hosted_app, api_delete_self_hosted_app,
+    api_get_self_hosted_app
 )
 
 @app.route('/')
@@ -169,10 +172,14 @@ def index():
                              hosts_config=hosts_config,
                              current_host_id=current_host_id)
     
+    # Get self-hosted apps
+    self_hosted_apps = get_apps_by_category()
+    
     logger.info("Rendering multi-host dashboard template")
     return render_template('dashboard.html', 
                          all_hosts_data=all_hosts_data,
                          global_stats=global_stats,
+                         self_hosted_apps=self_hosted_apps,
                          hosturl=os.getenv('HOST_URL', 'http://localhost:5000'),
                          stats_enabled=stats_enabled,
                          hosts_config=hosts_config,
@@ -215,6 +222,13 @@ app.route('/api/containers', methods=['GET'])(api_containers)
 app.route('/api/containers/<container_id>', methods=['GET'])(api_container_details)
 app.route('/api/containers/stats', methods=['GET'])(api_container_stats)
 app.route('/api/unused-resources', methods=['GET'])(api_unused_resources)
+
+# Register self-hosted apps API routes
+app.route('/api/self-hosted-apps', methods=['GET'])(api_self_hosted_apps)
+app.route('/api/self-hosted-apps', methods=['POST'])(api_add_self_hosted_app)
+app.route('/api/self-hosted-apps/<app_id>', methods=['GET'])(api_get_self_hosted_app)
+app.route('/api/self-hosted-apps/<app_id>', methods=['PUT'])(api_update_self_hosted_app)
+app.route('/api/self-hosted-apps/<app_id>', methods=['DELETE'])(api_delete_self_hosted_app)
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))

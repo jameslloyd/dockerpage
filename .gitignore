@@ -339,3 +339,6 @@ dev_settings.py
 app.log
 error.log
 access.log
+
+# Data directory - user configurations
+data/*.json

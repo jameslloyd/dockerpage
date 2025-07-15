@@ -14,7 +14,7 @@ current_host_id = None
 
 def load_docker_hosts():
     """Load Docker hosts configuration from JSON file."""
-    config_path = 'docker_hosts.json'
+    config_path = 'data/docker_hosts.json'
     
     # Default configuration
     default_config = {
@@ -55,7 +55,7 @@ def load_docker_hosts():
 def save_docker_hosts(hosts_config):
     """Save Docker hosts configuration to JSON file."""
     try:
-        with open('docker_hosts.json', 'w') as f:
+        with open('data/docker_hosts.json', 'w') as f:
             json.dump(hosts_config, f, indent=2)
         logger.info("Docker hosts configuration saved successfully")
     except Exception as e:
